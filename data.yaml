@@ -1,0 +1,10 @@
+path: ./datasets
+train: images/train
+val: images/val
+
+nc: 4
+names:
+  0: crack
+  1: scratch
+  2: hole
+  3: dent
