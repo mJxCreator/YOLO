@@ -1,18 +1,42 @@
-.venv/
+# Python
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
+.pytest_cache/
+
+# Virtual environment
+.venv/
+
+# Training & detection outputs
 runs/
-datasets/images/
-datasets/labels/
+
+# Raw / intermediate data (not the final dataset)
 raw_images/
 raw_labels/
+GC10-DET/
+
+# Dataset images and labels (large files, not version-controlled)
+datasets/images/
+datasets/labels/
+
+# Dataset cache files
+*.cache
+
+# Model weights & exports
 *.pt
 *.onnx
 *.engine
 *.mlpackage
-*.xml
-*.json
 weights/
+
+# Temp & log files
+*.log
+*.h5
+_DELETE_*
+_DELETE_.*
+
+# OS files
 .DS_Store
 thumbs.db
+desktop.ini
