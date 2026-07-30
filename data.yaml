@@ -2,9 +2,15 @@ path: ./datasets
 train: images/train
 val: images/val
 
-nc: 4
+nc: 10
 names:
-  0: crack
-  1: scratch
-  2: hole
-  3: dent
+  0: chongkong
+  1: hanfeng
+  2: yueyawan
+  3: shuiban
+  4: youban
+  5: siban
+  6: yiwu
+  7: yahen
+  8: zhehen
+  9: yaozhe
