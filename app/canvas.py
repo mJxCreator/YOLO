@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
 
 from .config import class_color
 
+BOX_PEN_WIDTH = 3   # 标注框线宽（加粗）
+
 
 class BoxItem(QGraphicsRectItem):
     """单个标注框：矩形 + 顶部文字标签"""
@@ -21,7 +23,7 @@ class BoxItem(QGraphicsRectItem):
         self.color = color or class_color(index)
         self.is_moving = False
 
-        pen = QPen(QColor(self.color), 2)
+        pen = QPen(QColor(self.color), BOX_PEN_WIDTH)
         pen.setCosmetic(True)
         self.setPen(pen)
         self.setFlag(QGraphicsRectItem.ItemIsSelectable, True)
@@ -45,7 +47,7 @@ class BoxItem(QGraphicsRectItem):
 
     def set_color(self, color):
         self.color = color
-        pen = QPen(QColor(color), 2)
+        pen = QPen(QColor(color), BOX_PEN_WIDTH)
         pen.setCosmetic(True)
         self.setPen(pen)
         self.text_item.setBrush(QColor(color))
@@ -92,6 +94,9 @@ class AnnotationCanvas(QGraphicsView):
         self._current_label = ""
         self._label_colors = {}          # 标签名 -> 颜色
 
+        self._undo_stack = []            # 撤销历史（每次记录变更前的框快照）
+        self._undo_limit = 100
+
     # ---------- 标签颜色 ----------
     def set_label_colors(self, colors: dict):
         self._label_colors = dict(colors)
@@ -134,6 +139,7 @@ class AnnotationCanvas(QGraphicsView):
     def load_image(self, path):
         self.scene.clear()
         self._boxes = []
+        self.clear_undo()
         self.image_path = str(path)
         self.image_pixmap = QPixmap(path)
         if self.image_pixmap.isNull():
@@ -170,7 +176,31 @@ class AnnotationCanvas(QGraphicsView):
     def get_boxes(self):
         return [(b.get_rect(), b.label) for b in self._boxes]
 
+    # ---------- 撤销 ----------
+    def clear_undo(self):
+        self._undo_stack.clear()
+
+    def can_undo(self):
+        return bool(self._undo_stack)
+
+    def _record_undo(self):
+        """记录变更前的框快照（用于撤销）"""
+        snapshot = [(QRectF(r), l) for r, l in self.get_boxes()]
+        if len(self._undo_stack) >= self._undo_limit:
+            self._undo_stack.pop(0)
+        self._undo_stack.append(snapshot)
+
+    def undo(self):
+        """撤销上一步操作，返回是否执行了撤销"""
+        if not self._undo_stack:
+            return False
+        snapshot = self._undo_stack.pop()
+        self.set_boxes(snapshot)
+        self.boxes_changed.emit()
+        return True
+
     def add_box_item(self, rect, label):
+        self._record_undo()
         item = BoxItem(rect, label, len(self._boxes))
         item.set_color(self.label_color(label, len(self._boxes)))
         self.scene.addItem(item)
@@ -178,13 +208,15 @@ class AnnotationCanvas(QGraphicsView):
         return item
 
     def delete_selected(self):
+        if not any(b.isSelected() for b in self._boxes):
+            return False
+        self._record_undo()
         for b in list(self._boxes):
             if b.isSelected():
                 self.scene.removeItem(b)
                 self._boxes.remove(b)
-                self.boxes_changed.emit()
-                return True
-        return False
+        self.boxes_changed.emit()
+        return True
 
     def select_box_at(self, scene_pos):
         selected = None
@@ -222,7 +254,7 @@ class AnnotationCanvas(QGraphicsView):
             self._current_rect_item = QGraphicsRectItem(QRectF(pos, pos))
             pen = QPen(QColor(self.label_color(self._current_label, len(self._boxes))))
             pen.setCosmetic(True)
-            pen.setWidth(2)
+            pen.setWidth(BOX_PEN_WIDTH)
             self._current_rect_item.setPen(pen)
             self.scene.addItem(self._current_rect_item)
             return
@@ -277,7 +309,13 @@ class AnnotationCanvas(QGraphicsView):
             return
 
         if self._moving_box is not None:
-            moved = self._moving_box.get_rect() != self._orig_rect
+            current_rect = self._moving_box.get_rect()
+            moved = current_rect != self._orig_rect
+            if moved:
+                # 先恢复移动前位置生成快照，再移回当前位置
+                self._moving_box.setRect(self._orig_rect)
+                self._record_undo()
+                self._moving_box.setRect(current_rect)
             self._moving_box = None
             if moved:
                 self.boxes_changed.emit()

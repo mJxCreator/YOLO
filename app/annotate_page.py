@@ -161,10 +161,13 @@ class AnnotatePage(QWidget):
         rv.addWidget(self.canvas, 1)
 
         toolbar = QHBoxLayout()
-        self.btn_draw = QPushButton("画框 (W)")
+        self.btn_draw = QPushButton("框选 (W)")
         self.btn_draw.setCheckable(True)
         self.btn_draw.toggled.connect(self.canvas.set_draw_mode)
         self.canvas.draw_mode_changed.connect(self.btn_draw.setChecked)
+
+        self.btn_undo = QPushButton("撤销 (Ctrl+Z)")
+        self.btn_undo.clicked.connect(self.undo)
 
         self.btn_delete_box = QPushButton("删除框 (Del)")
         self.btn_delete_box.clicked.connect(self.delete_box)
@@ -174,6 +177,7 @@ class AnnotatePage(QWidget):
         self.btn_save.clicked.connect(self.save_labels)
 
         toolbar.addWidget(self.btn_draw)
+        toolbar.addWidget(self.btn_undo)
         toolbar.addWidget(self.btn_delete_box)
         toolbar.addWidget(self.btn_save)
         rv.addLayout(toolbar)
@@ -188,6 +192,7 @@ class AnnotatePage(QWidget):
         QShortcut(QKeySequence("A"), self, activated=self.prev_image)
         QShortcut(QKeySequence("D"), self, activated=self.next_image)
         QShortcut(QKeySequence("W"), self, activated=self.toggle_draw_mode)
+        QShortcut(QKeySequence("Ctrl+Z"), self, activated=self.undo)
         QShortcut(QKeySequence("Delete"), self, activated=self.delete_box)
         QShortcut(QKeySequence("Ctrl+S"), self, activated=self.save_labels)
 
@@ -440,6 +445,16 @@ class AnnotatePage(QWidget):
 
     def delete_box(self):
         self.canvas.delete_selected()
+
+    def undo(self):
+        """撤销上一步标注操作（画框/删除框/移动框）"""
+        if not self.canvas.has_image():
+            return
+        if self.canvas.undo():
+            self._mark_dirty()
+            self.status_message.emit("已撤销上一步操作")
+        else:
+            self.status_message.emit("没有可撤销的操作")
 
     # ---------- 导入 ----------
     def import_images(self):
