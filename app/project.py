@@ -74,6 +74,47 @@ class Project:
     def save_classes(self, classes):
         self.classes_file.write_text("\n".join(classes), encoding="utf-8")
 
+    # ---------- 类别颜色 ----------
+    def get_class_colors(self):
+        """返回 {类别名: 颜色字符串} 映射"""
+        if self.meta_file.exists():
+            try:
+                meta = json.loads(self.meta_file.read_text(encoding="utf-8"))
+                return meta.get("class_colors", {})
+            except Exception:
+                return {}
+        return {}
+
+    def save_class_color(self, name, color):
+        colors = self.get_class_colors()
+        colors[name] = color
+        self._save_meta({"class_colors": colors})
+
+    def remove_class_color(self, name):
+        colors = self.get_class_colors()
+        if name in colors:
+            del colors[name]
+            self._save_meta({"class_colors": colors})
+
+    def rename_class_color(self, old_name, new_name):
+        colors = self.get_class_colors()
+        if old_name in colors:
+            colors[new_name] = colors.pop(old_name)
+            self._save_meta({"class_colors": colors})
+
+    def _save_meta(self, update: dict):
+        meta = {}
+        if self.meta_file.exists():
+            try:
+                meta = json.loads(self.meta_file.read_text(encoding="utf-8"))
+            except Exception:
+                meta = {}
+        meta.update(update)
+        self.meta_file.write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
     # ---------- 标签 ----------
     def get_label_path(self, image_path):
         return self.labels_dir / (Path(image_path).stem + ".txt")

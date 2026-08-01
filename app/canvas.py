@@ -41,25 +41,17 @@ class BoxItem(QGraphicsRectItem):
     def set_label(self, label):
         self.label = label
         self.text_item.setText(label)
-        color = class_color(self.index)
+        self._update_text_pos()
+
+    def set_color(self, color):
         self.color = color
         pen = QPen(QColor(color), 2)
         pen.setCosmetic(True)
         self.setPen(pen)
         self.text_item.setBrush(QColor(color))
-        self._update_text_pos()
 
     def get_rect(self) -> QRectF:
         return self.rect()
-
-    def set_color_index(self, index):
-        self.index = index
-        color = class_color(index)
-        self.color = color
-        pen = QPen(QColor(color), 2)
-        pen.setCosmetic(True)
-        self.setPen(pen)
-        self.text_item.setBrush(QColor(color))
 
 
 class AnnotationCanvas(QGraphicsView):
@@ -98,6 +90,21 @@ class AnnotationCanvas(QGraphicsView):
 
         self._class_names = []
         self._current_label = ""
+        self._label_colors = {}          # 标签名 -> 颜色
+
+    # ---------- 标签颜色 ----------
+    def set_label_colors(self, colors: dict):
+        self._label_colors = dict(colors)
+        self.refresh_box_colors()
+
+    def label_color(self, label, index=0):
+        if label in self._label_colors:
+            return self._label_colors[label]
+        return class_color(index)
+
+    def refresh_box_colors(self):
+        for b in self._boxes:
+            b.set_color(self.label_color(b.label, b.index))
 
     # ---------- 模式 ----------
     @property
@@ -156,6 +163,7 @@ class AnnotationCanvas(QGraphicsView):
         self._boxes = []
         for rect, label in boxes:
             item = BoxItem(rect, label, len(self._boxes))
+            item.set_color(self.label_color(label, len(self._boxes)))
             self.scene.addItem(item)
             self._boxes.append(item)
 
@@ -164,6 +172,7 @@ class AnnotationCanvas(QGraphicsView):
 
     def add_box_item(self, rect, label):
         item = BoxItem(rect, label, len(self._boxes))
+        item.set_color(self.label_color(label, len(self._boxes)))
         self.scene.addItem(item)
         self._boxes.append(item)
         return item
@@ -211,7 +220,7 @@ class AnnotationCanvas(QGraphicsView):
         if self._draw_mode and event.button() == Qt.LeftButton:
             self._start_point = pos
             self._current_rect_item = QGraphicsRectItem(QRectF(pos, pos))
-            pen = QPen(QColor(class_color(len(self._boxes))))
+            pen = QPen(QColor(self.label_color(self._current_label, len(self._boxes))))
             pen.setCosmetic(True)
             pen.setWidth(2)
             self._current_rect_item.setPen(pen)

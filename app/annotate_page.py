@@ -1,8 +1,9 @@
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
+from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
+    QDialog,
     QFileDialog,
     QHBoxLayout,
     QInputDialog,
@@ -17,8 +18,57 @@ from PySide6.QtWidgets import (
 )
 
 from .canvas import AnnotationCanvas
+from .color_dialog import SimpleColorDialog
 from .config import IMAGE_EXTS, class_color
 from .yolo_format import load_yolo_labels, save_yolo_labels
+
+
+class TagRowWidget(QWidget):
+    """标签列表行：左侧标签名（点击选中），右侧色盘按钮（点击选颜色）"""
+
+    selected = Signal(str)        # 标签名
+    color_requested = Signal(str) # 标签名
+
+    def __init__(self, name, color, parent=None):
+        super().__init__(parent)
+        self.name = name
+        self._selected = False
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(6, 2, 6, 2)
+        lay.setSpacing(6)
+
+        self.lbl = QLabel(name)
+        self.lbl.setCursor(Qt.PointingHandCursor)
+        lay.addWidget(self.lbl, 1)
+
+        self.btn_color = QPushButton()
+        self.btn_color.setFixedSize(22, 22)
+        self.btn_color.setCursor(Qt.PointingHandCursor)
+        self.btn_color.setToolTip(f"点击选择「{name}」的颜色")
+        self.set_swatch(color)
+        self.btn_color.clicked.connect(lambda: self.color_requested.emit(self.name))
+        lay.addWidget(self.btn_color)
+
+    def set_swatch(self, color):
+        self.btn_color.setStyleSheet(
+            f"QPushButton {{ background-color: {color}; "
+            "border: 1px solid #888; border-radius: 3px; }}"
+        )
+
+    def set_selected(self, selected):
+        self._selected = selected
+        if selected:
+            self.lbl.setStyleSheet(
+                "font-weight: bold; color: #2d8cf0; background-color: rgba(45, 140, 240, 0.12);"
+            )
+        else:
+            self.lbl.setStyleSheet("background: transparent;")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.selected.emit(self.name)
+        super().mousePressEvent(event)
 
 
 class AnnotatePage(QWidget):
@@ -33,6 +83,8 @@ class AnnotatePage(QWidget):
         self.current_index = -1
         self.current_boxes = []      # list of (QRectF, class_id)
         self._dirty = False
+        self._current_tag = None
+        self._tag_rows = {}
 
         self.setAcceptDrops(True)
         self._build_ui()
@@ -79,9 +131,9 @@ class AnnotatePage(QWidget):
         lv.addWidget(lbl_tag)
 
         self.tag_list = QListWidget()
-        self.tag_list.setFixedHeight(110)
+        self.tag_list.setFixedHeight(150)
         self.tag_list.setAcceptDrops(False)
-        self.tag_list.itemClicked.connect(self._on_pick_tag)
+        self.tag_list.setSelectionMode(QListWidget.NoSelection)
         lv.addWidget(self.tag_list)
 
         tag_btns = QHBoxLayout()
@@ -148,25 +200,74 @@ class AnnotatePage(QWidget):
         self._load_images()
         self._update_classes()
 
+    def _full_class_colors(self):
+        """所有标签的完整颜色映射：已自定义的保留，未定义的按类别序号分配默认色"""
+        classes = self.project.get_classes()
+        saved = self.project.get_class_colors()
+        return {name: saved.get(name, class_color(i)) for i, name in enumerate(classes)}
+
     def _update_classes(self):
         classes = self.project.get_classes()
+        colors = self._full_class_colors()
         self.canvas.set_class_names(classes)
+        self.canvas.set_label_colors(colors)
         current = self.canvas.current_label()
-        self.tag_list.clear()
-        for name in classes:
-            self.tag_list.addItem(QListWidgetItem(name))
-        if current and current in classes:
-            rows = self.tag_list.findItems(current, Qt.MatchExactly)
-            if rows:
-                self.tag_list.setCurrentItem(rows[0])
-        elif classes:
-            self.tag_list.setCurrentRow(0)
-            self.canvas.set_current_label(classes[0])
 
-    def _on_pick_tag(self, item):
-        """点击左侧标签列表，选择当前要画的标签"""
-        self.canvas.set_current_label(item.text())
-        self.status_message.emit(f"当前标签: {item.text()}")
+        self.tag_list.clear()
+        self._tag_rows = {}
+        for i, name in enumerate(classes):
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, name)
+            item.setSizeHint(self._tag_row_size())
+            self.tag_list.addItem(item)
+            row = TagRowWidget(name, colors[name])
+            row.selected.connect(self._on_pick_tag)
+            row.color_requested.connect(self._pick_tag_color)
+            self.tag_list.setItemWidget(item, row)
+            self._tag_rows[name] = row
+
+        # 高亮当前标签
+        if current and current in self._tag_rows:
+            self._current_tag = current
+            self._set_tag_highlight(current)
+        elif classes:
+            self._current_tag = classes[0]
+            self.canvas.set_current_label(classes[0])
+            self._set_tag_highlight(classes[0])
+        else:
+            self._current_tag = None
+
+    @staticmethod
+    def _tag_row_size():
+        return QSize(0, 32)
+
+    def _set_tag_highlight(self, name):
+        for n, row in self._tag_rows.items():
+            row.set_selected(n == name)
+
+    def _on_pick_tag(self, name):
+        """点击左侧标签列表行，选择当前要画的标签"""
+        self._current_tag = name
+        self.canvas.set_current_label(name)
+        self._set_tag_highlight(name)
+        self.status_message.emit(f"当前标签: {name}")
+
+    def _pick_tag_color(self, name):
+        """点击标签行末端的色盘，选择该标签的颜色"""
+        colors = self._full_class_colors()
+        dlg = SimpleColorDialog(
+            QColor(colors.get(name, "#e6194B")),
+            f"选择「{name}」的颜色",
+            self,
+        )
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        color = dlg.get_color()
+        self.project.save_class_color(name, color.name())
+        colors = self._full_class_colors()
+        self.canvas.set_label_colors(colors)
+        self._tag_rows[name].set_swatch(colors[name])
+        self.status_message.emit(f"标签「{name}」颜色已更新")
 
     # ---------- 图片加载 ----------
     def _load_images(self):
@@ -264,20 +365,18 @@ class AnnotatePage(QWidget):
         self.project.save_classes(classes)
         self._update_classes()
         # 自动选中新标签
+        self._current_tag = name
         self.canvas.set_current_label(name)
-        rows = self.tag_list.findItems(name, Qt.MatchExactly)
-        if rows:
-            self.tag_list.setCurrentItem(rows[0])
+        self._set_tag_highlight(name)
         self.status_message.emit(f"已添加标签「{name}」")
 
     def delete_class(self):
         if self.project is None:
             return
-        item = self.tag_list.currentItem()
-        if item is None:
+        name = self._current_tag
+        if name is None:
             QMessageBox.information(self, "提示", "请先在左侧标签列表中选择要删除的标签")
             return
-        name = item.text()
         ret = QMessageBox.question(
             self, "删除标签",
             f"确定删除标签「{name}」？\n当前图片中该标签的标注框也会被删除。",
@@ -287,6 +386,7 @@ class AnnotatePage(QWidget):
         classes = self.project.get_classes()
         classes = [c for c in classes if c != name]
         self.project.save_classes(classes)
+        self.project.remove_class_color(name)
         # 删除当前图片中该标签的标注框
         if self.canvas.has_image():
             boxes = self.canvas.get_boxes()
@@ -294,6 +394,7 @@ class AnnotatePage(QWidget):
             if len(kept) != len(boxes):
                 self.canvas.set_boxes(kept)
                 self._mark_dirty()
+        self._current_tag = None
         self._update_classes()
         self.status_message.emit(f"已删除标签「{name}」")
 
@@ -301,11 +402,10 @@ class AnnotatePage(QWidget):
         """重命名左侧标签列表中选中的标签，保留其在类别列表中的位置（类ID不变）"""
         if self.project is None:
             return
-        item = self.tag_list.currentItem()
-        if item is None:
+        old_name = self._current_tag
+        if old_name is None:
             QMessageBox.information(self, "提示", "请先在左侧标签列表中选择要重命名的标签")
             return
-        old_name = item.text()
         new_name, ok = QInputDialog.getText(self, "重命名标签", "输入新名称:", text=old_name)
         if not ok or not new_name.strip():
             return
@@ -319,6 +419,7 @@ class AnnotatePage(QWidget):
         idx = classes.index(old_name)
         classes[idx] = new_name
         self.project.save_classes(classes)
+        self.project.rename_class_color(old_name, new_name)
         # 同步更新画布上该标签的标注框
         if self.canvas.has_image():
             boxes = self.canvas.get_boxes()
@@ -333,6 +434,7 @@ class AnnotatePage(QWidget):
             if changed:
                 self.canvas.set_boxes(updated)
                 self._mark_dirty()
+        self._current_tag = new_name
         self._update_classes()
         self.status_message.emit(f"已重命名「{old_name}」→「{new_name}」")
 
