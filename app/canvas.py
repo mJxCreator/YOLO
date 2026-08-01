@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 from .config import class_color
 
-BOX_PEN_WIDTH = 3           # 标注框/多边形线宽
+BOX_PEN_WIDTH = 2           # 标注框/多边形线宽
 CLOSE_POLY_PX = 12          # 多边形点击起点闭合的判定距离（视图像素）
 
 
@@ -133,15 +133,15 @@ class PolygonItem(QGraphicsPolygonItem):
 
 
 class PolygonPreviewItem(QGraphicsPathItem):
-    """多边形绘制中的实时预览：顶点圆点 + 依次连线（虚线）"""
+    """多边形绘制中的实时预览：顶点圆点 + 依次连线（实线）"""
 
     def __init__(self, color):
         super().__init__()
         self.color = color
         self.points = []
+        self.setAcceptedMouseButtons(Qt.NoButton)
         pen = QPen(QColor(color), BOX_PEN_WIDTH)
         pen.setCosmetic(True)
-        pen.setStyle(Qt.DashLine)
         self.setPen(pen)
 
     def set_points(self, points):
@@ -417,11 +417,10 @@ class AnnotationCanvas(QGraphicsView):
     # ---------- 多边形绘制 ----------
     def _polygon_click(self, scene_pos, view_pos):
         pts = self._poly_points
-        if pts:
+        if pts and len(pts) >= 3:
             first = self.mapFromScene(pts[0])
-            if (first - view_pos).manhattanLength() <= CLOSE_POLY_PX:
-                if len(pts) >= 3:
-                    self._finish_polygon()
+            if (QPointF(first) - view_pos).manhattanLength() <= CLOSE_POLY_PX:
+                self._finish_polygon()
                 return
         if len(pts) < 500:
             self._poly_points.append(QPointF(scene_pos))
@@ -536,6 +535,9 @@ class AnnotationCanvas(QGraphicsView):
         if self._panning:
             self._panning = False
             self.unsetCursor()
+            return
+
+        if self._polygon_mode:
             return
 
         if self._draw_mode and self._current_rect_item is not None:
