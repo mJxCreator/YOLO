@@ -1,14 +1,16 @@
-# YOLO26 材料缺陷检测系统
+# YOLO26 目标检测一体化平台
 
-基于 [Ultralytics YOLO26](https://docs.ultralytics.com/models/yolo26) 的材料表面缺陷检测系统，支持裂纹、划痕、孔洞、凹坑等多种缺陷类型的实时检测。
+基于 [Ultralytics YOLO26](https://docs.ultralytics.com/models/yolo26) 的一站式目标检测平台，内置**数据标注 → 数据集划分 → 模型训练 → 推理检测**全流程。类别体系完全开放自定义，适用于缺陷检测、工业质检、安全监控、物体识别等任意目标检测场景，不局限于特定领域。
 
 ## 特性
 
 - **YOLO26 架构**：端到端无 NMS 目标检测，速度更快、部署更轻量
-- **材料缺陷检测**：预设裂纹(crack)、划痕(scratch)、孔洞(hole)、凹坑(dent) 四类常见缺陷
-- **支持多种输入**：单张图片、批量图片、视频流
+- **开放类别体系**：标签可视化管理系统，可任意新增/重命名/删除类别，并为每个类别自定义颜色，适用于任意目标检测任务
+- **支持多种输入**：单张图片、批量图片、视频流、摄像头
 - **模型导出**：支持导出为 ONNX / TensorRT 格式，方便边缘端部署
 - **轻量启动**：默认使用 yolo26n（Nano）模型，快速上手
+
+> 💡 虽然项目最初面向材料缺陷检测，但核心能力（标注、训练、推理）与具体类别完全解耦，只需在 [data.yaml](file:///c:/mProgram/YOLO26/data.yaml) 中替换类别名即可用于其他领域，如 PCB 缺陷、农作物病害、车辆/行人识别等。
 
 ## 环境要求
 
@@ -30,7 +32,7 @@ uv run python main.py
 进入应用后可完成以下操作：
 
 1. **启动界面**：新建项目 / 打开历史项目
-2. **标注界面**：导入图片（支持整个文件夹批量导入）→ 添加缺陷类别 → 画框标注（快捷键 W 画框、A/D 切换图片、Ctrl+S 保存）
+2. **标注界面**：导入图片（支持整个文件夹批量导入，也可直接拖拽文件/文件夹）→ 管理自定义标签（新增/重命名/删除，每个标签独立配色）→ 画框标注（快捷键 W 画框、A/D 切换图片、Ctrl+S 保存）
 3. **训练界面**：一键划分数据集（默认 80/20）→ 配置参数 → 开始训练（后台运行，实时日志，自动检测 GPU/CPU）
 4. **检测界面**：图片/文件夹/视频/摄像头检测，结果可视化
 
@@ -68,7 +70,7 @@ uv run python -c "from ultralytics import YOLO; model = YOLO('yolo26n.pt'); prin
 
 ### 数据集结构
 
-将你的缺陷检测数据集按照 YOLO 格式组织：
+将你的数据集按照 YOLO 格式组织：
 
 ```
 raw_images/          # 原始图片
@@ -99,7 +101,7 @@ uv run scripts/split_data.py --images raw_images --labels raw_labels
 
 ### 配置数据
 
-根据你的缺陷类别修改 [data.yaml](file:///c:/mProgram/YOLO26/data.yaml)：
+根据你的目标类别修改 [data.yaml](file:///c:/mProgram/YOLO26/data.yaml)：
 
 ```yaml
 path: ./datasets
@@ -194,11 +196,14 @@ model.export(format="engine", imgsz=640, half=True)
 ```
 ├── main.py                   # GUI 应用入口（推荐使用）
 ├── app/                      # GUI 应用代码
+│   ├── home_window.py        # 启动界面
+│   ├── main_window.py        # 主窗口
 │   ├── annotate_page.py      # 标注界面
 │   ├── canvas.py             # 标注画布
+│   ├── color_dialog.py       # 极简颜色选择器
+│   ├── project.py            # 项目管理（图片/标签/类别颜色）
 │   ├── train_page.py         # 训练界面
 │   ├── detect_page.py        # 检测界面
-│   ├── home_window.py        # 启动界面
 │   └── ...
 ├── scripts/
 │   ├── train.py              # 训练脚本
@@ -224,9 +229,9 @@ model.export(format="engine", imgsz=640, half=True)
 
 ## 常见问题
 
-### 如何适配我的缺陷类别？
+### 如何适配我的目标类别？
 
-编辑 [data.yaml](file:///c:/mProgram/YOLO26/data.yaml) 中的 `nc` 和 `names` 字段，修改为你实际的缺陷类别名称和数量即可。
+编辑 [data.yaml](file:///c:/mProgram/YOLO26/data.yaml) 中的 `nc` 和 `names` 字段，修改为你实际的类别名称和数量即可，无需改动任何代码。GUI 标注界面中也可直接通过「新增/重命名/删除」按钮实时管理类别。
 
 ### 训练时显存不足怎么办？
 
@@ -239,7 +244,7 @@ model.export(format="engine", imgsz=640, half=True)
 - 增加训练数据量和多样性
 - 使用数据增强（训练脚本已内置 mosaic、mixup、copy-paste 等）
 - 调大 `epochs` 训练轮数
-- 收集更多代表性缺陷样本
+- 收集更多代表性目标样本
 
 ### 提示 86 80 错误
 
