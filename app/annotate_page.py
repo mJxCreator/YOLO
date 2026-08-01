@@ -155,6 +155,7 @@ class AnnotatePage(QWidget):
 
         self.canvas = AnnotationCanvas()
         self.canvas.new_box_created.connect(self._on_new_box)
+        self.canvas.annotation_created.connect(self._mark_dirty)
         self.canvas.boxes_changed.connect(self._mark_dirty)
         self.canvas.image_loaded.connect(self._on_image_loaded)
         self.canvas.setAcceptDrops(False)
@@ -166,17 +167,23 @@ class AnnotatePage(QWidget):
         self.btn_draw.toggled.connect(self.canvas.set_draw_mode)
         self.canvas.draw_mode_changed.connect(self.btn_draw.setChecked)
 
-        self.btn_undo = QPushButton("撤销 (Ctrl+Z)")
+        self.btn_polygon = QPushButton("描边 (S)")
+        self.btn_polygon.setCheckable(True)
+        self.btn_polygon.toggled.connect(self.canvas.set_polygon_mode)
+        self.canvas.polygon_mode_changed.connect(self.btn_polygon.setChecked)
+
+        self.btn_undo = QPushButton("撤销")
         self.btn_undo.clicked.connect(self.undo)
 
         self.btn_delete_box = QPushButton("删除框 (Del)")
         self.btn_delete_box.clicked.connect(self.delete_box)
 
-        self.btn_save = QPushButton("保存 (Ctrl+S)")
+        self.btn_save = QPushButton("保存")
         self.btn_save.setStyleSheet("QPushButton { background: #2d8cf0; color: white; }")
         self.btn_save.clicked.connect(self.save_labels)
 
         toolbar.addWidget(self.btn_draw)
+        toolbar.addWidget(self.btn_polygon)
         toolbar.addWidget(self.btn_undo)
         toolbar.addWidget(self.btn_delete_box)
         toolbar.addWidget(self.btn_save)
@@ -192,12 +199,16 @@ class AnnotatePage(QWidget):
         QShortcut(QKeySequence("A"), self, activated=self.prev_image)
         QShortcut(QKeySequence("D"), self, activated=self.next_image)
         QShortcut(QKeySequence("W"), self, activated=self.toggle_draw_mode)
+        QShortcut(QKeySequence("S"), self, activated=self.toggle_polygon_mode)
         QShortcut(QKeySequence("Ctrl+Z"), self, activated=self.undo)
         QShortcut(QKeySequence("Delete"), self, activated=self.delete_box)
         QShortcut(QKeySequence("Ctrl+S"), self, activated=self.save_labels)
 
     def toggle_draw_mode(self):
         self.canvas.set_draw_mode(not self.canvas.draw_mode)
+
+    def toggle_polygon_mode(self):
+        self.canvas.set_polygon_mode(not self.canvas.polygon_mode)
 
     # ---------- 项目绑定 ----------
     def set_project(self, project):
@@ -311,13 +322,13 @@ class AnnotatePage(QWidget):
             return
         w, h = size
         label_path = self.project.get_label_path(img_path)
-        boxes = load_yolo_labels(label_path, w, h)
+        items = load_yolo_labels(label_path, w, h)
         classes = self.project.get_classes()
         labeled = []
-        for rect, cls_id in boxes:
+        for kind, cls_id, data in items:
             label = classes[cls_id] if cls_id < len(classes) else f"cls_{cls_id}"
-            labeled.append((rect, label))
-        self.canvas.set_boxes(labeled)
+            labeled.append((kind, data, label))
+        self.canvas.set_annotations(labeled)
 
     def _on_new_box(self, rect, label):
         self._mark_dirty()
@@ -337,15 +348,15 @@ class AnnotatePage(QWidget):
         w, h = size
         classes = self.project.get_classes()
         class_to_id = {c: i for i, c in enumerate(classes)}
-        boxes = []
-        for rect, label in self.canvas.get_boxes():
+        items = []
+        for kind, geom, label in self.canvas.get_annotations():
             cls_id = class_to_id.get(label, 0)
-            boxes.append((rect, cls_id))
+            items.append((kind, cls_id, geom))
         img_path = self.image_list[self.current_index]
         label_path = self.project.get_label_path(img_path)
-        save_yolo_labels(label_path, boxes, w, h)
+        save_yolo_labels(label_path, items, w, h)
         self._dirty = False
-        self.status_message.emit(f"已保存 {len(boxes)} 个标注 → {label_path.name}")
+        self.status_message.emit(f"已保存 {len(items)} 个标注 → {label_path.name}")
 
     # ---------- 导航 ----------
     def prev_image(self):
@@ -392,12 +403,12 @@ class AnnotatePage(QWidget):
         classes = [c for c in classes if c != name]
         self.project.save_classes(classes)
         self.project.remove_class_color(name)
-        # 删除当前图片中该标签的标注框
+        # 删除当前图片中该标签的标注（框或多边形）
         if self.canvas.has_image():
-            boxes = self.canvas.get_boxes()
-            kept = [(r, l) for r, l in boxes if l != name]
-            if len(kept) != len(boxes):
-                self.canvas.set_boxes(kept)
+            anns = self.canvas.get_annotations()
+            kept = [a for a in anns if a[2] != name]
+            if len(kept) != len(anns):
+                self.canvas.set_annotations(kept)
                 self._mark_dirty()
         self._current_tag = None
         self._update_classes()
@@ -425,19 +436,19 @@ class AnnotatePage(QWidget):
         classes[idx] = new_name
         self.project.save_classes(classes)
         self.project.rename_class_color(old_name, new_name)
-        # 同步更新画布上该标签的标注框
+        # 同步更新画布上该标签的标注（框或多边形）
         if self.canvas.has_image():
-            boxes = self.canvas.get_boxes()
+            anns = self.canvas.get_annotations()
             changed = False
             updated = []
-            for rect, label in boxes:
-                if label == old_name:
-                    updated.append((rect, new_name))
+            for a in anns:
+                if a[2] == old_name:
+                    updated.append((a[0], a[1], new_name))
                     changed = True
                 else:
-                    updated.append((rect, label))
+                    updated.append(a)
             if changed:
-                self.canvas.set_boxes(updated)
+                self.canvas.set_annotations(updated)
                 self._mark_dirty()
         self._current_tag = new_name
         self._update_classes()
