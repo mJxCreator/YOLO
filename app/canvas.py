@@ -177,14 +177,6 @@ class AnnotationCanvas(QGraphicsView):
                 return True
         return False
 
-    def change_selected_label(self, label):
-        for b in self._boxes:
-            if b.isSelected():
-                b.set_label(label)
-                self.boxes_changed.emit()
-                return True
-        return False
-
     def select_box_at(self, scene_pos):
         selected = None
         for b in self._boxes:

@@ -7,7 +7,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
     QLabel,
-    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
@@ -74,6 +73,29 @@ class AnnotatePage(QWidget):
         nav.addWidget(self.btn_next)
         lv.addLayout(nav)
 
+        # 标签导航栏：显示所有已添加的标签，点击即可选择
+        lbl_tag = QLabel("标签列表（点击选择）")
+        lbl_tag.setStyleSheet("font-weight: bold; margin-top: 6px;")
+        lv.addWidget(lbl_tag)
+
+        self.tag_list = QListWidget()
+        self.tag_list.setFixedHeight(110)
+        self.tag_list.setAcceptDrops(False)
+        self.tag_list.itemClicked.connect(self._on_pick_tag)
+        lv.addWidget(self.tag_list)
+
+        tag_btns = QHBoxLayout()
+        self.btn_add_tag = QPushButton("新增")
+        self.btn_add_tag.clicked.connect(self.add_class)
+        self.btn_rename_tag = QPushButton("重命名")
+        self.btn_rename_tag.clicked.connect(self.rename_class)
+        self.btn_del_tag = QPushButton("删除")
+        self.btn_del_tag.clicked.connect(self.delete_class)
+        tag_btns.addWidget(self.btn_add_tag)
+        tag_btns.addWidget(self.btn_rename_tag)
+        tag_btns.addWidget(self.btn_del_tag)
+        lv.addLayout(tag_btns)
+
         # 右侧：画布 + 底部工具栏
         right = QWidget()
         rv = QVBoxLayout(right)
@@ -92,27 +114,14 @@ class AnnotatePage(QWidget):
         self.btn_draw.toggled.connect(self.canvas.set_draw_mode)
         self.canvas.draw_mode_changed.connect(self.btn_draw.setChecked)
 
-        self.combo_class = QLineEdit()
-        self.combo_class.setPlaceholderText("点击可编辑当前类别")
-
-        self.btn_add_class = QPushButton("添加类别")
-        self.btn_add_class.clicked.connect(self.add_class)
-
         self.btn_delete_box = QPushButton("删除框 (Del)")
         self.btn_delete_box.clicked.connect(self.delete_box)
-
-        self.btn_change_class = QPushButton("改类别")
-        self.btn_change_class.clicked.connect(self.change_box_class)
 
         self.btn_save = QPushButton("保存 (Ctrl+S)")
         self.btn_save.setStyleSheet("QPushButton { background: #2d8cf0; color: white; }")
         self.btn_save.clicked.connect(self.save_labels)
 
         toolbar.addWidget(self.btn_draw)
-        toolbar.addWidget(QLabel("类别:"))
-        toolbar.addWidget(self.combo_class, 1)
-        toolbar.addWidget(self.btn_add_class)
-        toolbar.addWidget(self.btn_change_class)
         toolbar.addWidget(self.btn_delete_box)
         toolbar.addWidget(self.btn_save)
         rv.addLayout(toolbar)
@@ -142,10 +151,22 @@ class AnnotatePage(QWidget):
     def _update_classes(self):
         classes = self.project.get_classes()
         self.canvas.set_class_names(classes)
-        if classes:
-            self.combo_class.setText(classes[0])
-        else:
-            self.combo_class.setText("")
+        current = self.canvas.current_label()
+        self.tag_list.clear()
+        for name in classes:
+            self.tag_list.addItem(QListWidgetItem(name))
+        if current and current in classes:
+            rows = self.tag_list.findItems(current, Qt.MatchExactly)
+            if rows:
+                self.tag_list.setCurrentItem(rows[0])
+        elif classes:
+            self.tag_list.setCurrentRow(0)
+            self.canvas.set_current_label(classes[0])
+
+    def _on_pick_tag(self, item):
+        """点击左侧标签列表，选择当前要画的标签"""
+        self.canvas.set_current_label(item.text())
+        self.status_message.emit(f"当前标签: {item.text()}")
 
     # ---------- 图片加载 ----------
     def _load_images(self):
@@ -231,32 +252,89 @@ class AnnotatePage(QWidget):
 
     # ---------- 类别 ----------
     def add_class(self):
-        name, ok = QInputDialog.getText(self, "添加类别", "输入新类别名称:")
+        name, ok = QInputDialog.getText(self, "添加标签", "输入新标签名称:")
         if not ok or not name.strip():
             return
         name = name.strip()
         classes = self.project.get_classes()
         if name in classes:
-            QMessageBox.information(self, "提示", "类别已存在")
+            QMessageBox.information(self, "提示", "标签已存在")
             return
         classes.append(name)
         self.project.save_classes(classes)
         self._update_classes()
+        # 自动选中新标签
+        self.canvas.set_current_label(name)
+        rows = self.tag_list.findItems(name, Qt.MatchExactly)
+        if rows:
+            self.tag_list.setCurrentItem(rows[0])
+        self.status_message.emit(f"已添加标签「{name}」")
 
-    def change_box_class(self):
-        if not self.canvas.has_image():
+    def delete_class(self):
+        if self.project is None:
             return
-        name, ok = QInputDialog.getText(self, "修改类别", "输入新类别名称:", text=self.combo_class.text())
-        if not ok or not name.strip():
+        item = self.tag_list.currentItem()
+        if item is None:
+            QMessageBox.information(self, "提示", "请先在左侧标签列表中选择要删除的标签")
             return
-        name = name.strip()
+        name = item.text()
+        ret = QMessageBox.question(
+            self, "删除标签",
+            f"确定删除标签「{name}」？\n当前图片中该标签的标注框也会被删除。",
+        )
+        if ret != QMessageBox.Yes:
+            return
         classes = self.project.get_classes()
-        if name not in classes:
-            classes.append(name)
-            self.project.save_classes(classes)
-            self._update_classes()
-        if not self.canvas.change_selected_label(name):
-            QMessageBox.information(self, "提示", "请先选中一个标注框")
+        classes = [c for c in classes if c != name]
+        self.project.save_classes(classes)
+        # 删除当前图片中该标签的标注框
+        if self.canvas.has_image():
+            boxes = self.canvas.get_boxes()
+            kept = [(r, l) for r, l in boxes if l != name]
+            if len(kept) != len(boxes):
+                self.canvas.set_boxes(kept)
+                self._mark_dirty()
+        self._update_classes()
+        self.status_message.emit(f"已删除标签「{name}」")
+
+    def rename_class(self):
+        """重命名左侧标签列表中选中的标签，保留其在类别列表中的位置（类ID不变）"""
+        if self.project is None:
+            return
+        item = self.tag_list.currentItem()
+        if item is None:
+            QMessageBox.information(self, "提示", "请先在左侧标签列表中选择要重命名的标签")
+            return
+        old_name = item.text()
+        new_name, ok = QInputDialog.getText(self, "重命名标签", "输入新名称:", text=old_name)
+        if not ok or not new_name.strip():
+            return
+        new_name = new_name.strip()
+        if new_name == old_name:
+            return
+        classes = self.project.get_classes()
+        if new_name in classes:
+            QMessageBox.information(self, "提示", "该名称已存在")
+            return
+        idx = classes.index(old_name)
+        classes[idx] = new_name
+        self.project.save_classes(classes)
+        # 同步更新画布上该标签的标注框
+        if self.canvas.has_image():
+            boxes = self.canvas.get_boxes()
+            changed = False
+            updated = []
+            for rect, label in boxes:
+                if label == old_name:
+                    updated.append((rect, new_name))
+                    changed = True
+                else:
+                    updated.append((rect, label))
+            if changed:
+                self.canvas.set_boxes(updated)
+                self._mark_dirty()
+        self._update_classes()
+        self.status_message.emit(f"已重命名「{old_name}」→「{new_name}」")
 
     def delete_box(self):
         self.canvas.delete_selected()
