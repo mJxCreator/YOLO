@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from .canvas import AnnotationCanvas
-from .config import class_color
+from .config import IMAGE_EXTS, class_color
 from .yolo_format import load_yolo_labels, save_yolo_labels
 
 
@@ -35,6 +35,7 @@ class AnnotatePage(QWidget):
         self.current_boxes = []      # list of (QRectF, class_id)
         self._dirty = False
 
+        self.setAcceptDrops(True)
         self._build_ui()
 
     # ---------- UI ----------
@@ -51,8 +52,14 @@ class AnnotatePage(QWidget):
         self.btn_import.clicked.connect(self.import_images)
         lv.addWidget(self.btn_import)
 
+        hint = QLabel("提示：可直接把图片文件或整个文件夹拖入窗口")
+        hint.setStyleSheet("color: #888; font-size: 11px;")
+        hint.setWordWrap(True)
+        lv.addWidget(hint)
+
         self.file_list = QListWidget()
         self.file_list.currentRowChanged.connect(self._on_select_file)
+        self.file_list.setAcceptDrops(False)
         lv.addWidget(self.file_list, 1)
 
         self.lbl_index = QLabel("无图片")
@@ -76,6 +83,7 @@ class AnnotatePage(QWidget):
         self.canvas.new_box_created.connect(self._on_new_box)
         self.canvas.boxes_changed.connect(self._mark_dirty)
         self.canvas.image_loaded.connect(self._on_image_loaded)
+        self.canvas.setAcceptDrops(False)
         rv.addWidget(self.canvas, 1)
 
         toolbar = QHBoxLayout()
@@ -266,10 +274,7 @@ class AnnotatePage(QWidget):
 
     def _import_from_folder(self, folder):
         folder_path = Path(folder)
-        paths = [
-            str(f) for f in folder_path.iterdir()
-            if f.is_file() and f.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-        ]
+        paths = self._collect_images([folder_path])
         if not paths:
             self.status_message.emit("该文件夹内没有图片文件")
             return
@@ -282,3 +287,53 @@ class AnnotatePage(QWidget):
             self.status_message.emit(f"已导入 {len(imported)} 张图片")
         else:
             self.status_message.emit("没有新图片可导入")
+
+    @staticmethod
+    def _collect_images(items):
+        """从文件/文件夹列表中递归收集图片文件"""
+        collected = []
+        for item in items:
+            p = Path(item)
+            if p.is_dir():
+                collected.extend(
+                    f for f in p.rglob("*")
+                    if f.is_file() and f.suffix.lower() in IMAGE_EXTS
+                )
+            elif p.is_file() and p.suffix.lower() in IMAGE_EXTS:
+                collected.append(p)
+        return [str(f) for f in collected]
+
+    # ---------- 拖放导入 ----------
+    def dragEnterEvent(self, event):
+        if self.project is None:
+            event.ignore()
+            return
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if self.project is None:
+            event.ignore()
+            return
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        if self.project is None:
+            event.ignore()
+            return
+        urls = event.mimeData().urls()
+        paths = [u.toLocalFile() for u in urls if u.isLocalFile()]
+        if not paths:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+        images = self._collect_images(paths)
+        if not images:
+            self.status_message.emit("拖入的内容中没有图片文件")
+            return
+        self._import_from_paths(images)
