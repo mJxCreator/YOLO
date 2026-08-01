@@ -29,12 +29,23 @@ datasets/labels/
 *.engine
 *.mlpackage
 weights/
+!yolo26n.pt
+
+# GUI 项目数据（在仓库内创建的测试项目）
+defect_project*/
+新建文件夹/
+
+# PyInstaller build outputs
+build/
+dist/
 
 # Temp & log files
 *.log
 *.h5
 _DELETE_*
 _DELETE_.*
+_test_*
+*.tmp
 
 # OS files
 .DS_Store

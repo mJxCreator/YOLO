@@ -15,15 +15,42 @@
 - Python >= 3.10
 - 推荐使用 [uv](https://docs.astral.sh/uv/) 管理项目依赖
 
-## 快速开始
+## 使用方式
 
-### 1. 安装依赖
+系统提供两种使用方式：
+
+### 方式一：图形界面应用（推荐）
+
+集成了**人工标注 → 数据集划分 → 模型训练 → 推理检测**全流程的一站式桌面应用：
+
+```bash
+uv run python main.py
+```
+
+进入应用后可完成以下操作：
+
+1. **启动界面**：新建项目 / 打开历史项目
+2. **标注界面**：导入图片（支持整个文件夹批量导入）→ 添加缺陷类别 → 画框标注（快捷键 W 画框、A/D 切换图片、Ctrl+S 保存）
+3. **训练界面**：一键划分数据集（默认 80/20）→ 配置参数 → 开始训练（后台运行，实时日志，自动检测 GPU/CPU）
+4. **检测界面**：图片/文件夹/视频/摄像头检测，结果可视化
+
+打包为可执行程序（无需安装 Python）：
+
+```bash
+build.bat
+```
+
+打包产物在 `dist/` 目录，将整个目录分发给其他电脑即可使用。
+
+### 方式二：命令行脚本
+
+#### 1. 安装依赖
 
 ```bash
 uv sync
 ```
 
-### 2. 下载预训练模型
+#### 2. 下载预训练模型
 
 首次运行时会自动下载 `yolo26n.pt`，也可以手动下载：
 
@@ -31,7 +58,7 @@ uv sync
 uv run python -c "from ultralytics import YOLO; YOLO('yolo26n.pt')"
 ```
 
-### 3. 验证安装
+#### 3. 验证安装
 
 ```bash
 uv run python -c "from ultralytics import YOLO; model = YOLO('yolo26n.pt'); print('YOLO26 ready')"
@@ -65,7 +92,7 @@ raw_labels/          # 原始标签 (YOLO格式)
 ### 数据集划分
 
 ```bash
-uv run split_data.py --images raw_images --labels raw_labels
+uv run scripts/split_data.py --images raw_images --labels raw_labels
 ```
 
 默认按 80% / 20% 划分训练集和验证集。
@@ -92,7 +119,7 @@ names:                             # 类别名称
 ### 基础训练
 
 ```bash
-uv run train.py
+uv run scripts/train.py
 ```
 
 ### 高级训练
@@ -120,19 +147,19 @@ uv run scripts/train_advanced.py
 
 ```bash
 # 检测单张图片
-uv run detect.py --source path/to/image.jpg
+uv run scripts/detect.py --source path/to/image.jpg
 
 # 检测整个目录
-uv run detect.py --source datasets/images/val
+uv run scripts/detect.py --source datasets/images/val
 
 # 指定模型和置信度阈值
-uv run detect.py --model runs/train/yolo26_defect/weights/best.pt --source test.jpg --conf 0.3
+uv run scripts/detect.py --model runs/train/yolo26_defect/weights/best.pt --source test.jpg --conf 0.3
 ```
 
 ### 视频检测
 
 ```bash
-uv run detect.py --source demo.mp4 --video
+uv run scripts/detect.py --source demo.mp4 --video
 ```
 
 ### 参数说明
@@ -165,21 +192,34 @@ model.export(format="engine", imgsz=640, half=True)
 ## 项目结构
 
 ```
+├── main.py                   # GUI 应用入口（推荐使用）
+├── app/                      # GUI 应用代码
+│   ├── annotate_page.py      # 标注界面
+│   ├── canvas.py             # 标注画布
+│   ├── train_page.py         # 训练界面
+│   ├── detect_page.py        # 检测界面
+│   ├── home_window.py        # 启动界面
+│   └── ...
+├── scripts/
+│   ├── train.py              # 训练脚本
+│   ├── train_advanced.py     # 高级训练脚本
+│   ├── detect.py             # 推理脚本
+│   ├── split_data.py         # 数据集划分工具
+│   └── convert_gc10det.py    # GC10-DET 数据转换工具
+├── docs/
+│   └── 需求分析.md            # 需求文档
 ├── data.yaml                 # 数据集配置
 ├── pyproject.toml            # 项目依赖配置
-├── train.py                  # 训练脚本
-├── detect.py                 # 推理脚本
-├── split_data.py             # 数据集划分工具
-├── scripts/
-│   └── train_advanced.py     # 高级训练脚本
-├── datasets/                 # 数据集目录
+├── build.spec                # PyInstaller 打包配置
+├── build.bat                 # 一键打包脚本
+├── datasets/                 # 数据集目录（不纳入版本控制）
 │   ├── images/
 │   │   ├── train/            # 训练图片
 │   │   └── val/              # 验证图片
 │   └── labels/
 │       ├── train/            # 训练标签
 │       └── val/              # 验证标签
-└── runs/                     # 训练和推理输出
+└── runs/                     # 训练和推理输出（不纳入版本控制）
 ```
 
 ## 常见问题
