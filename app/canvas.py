@@ -285,12 +285,6 @@ class AnnotationCanvas(QGraphicsView):
         super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Delete or event.key() == Qt.Key_Backspace:
-            self.delete_selected()
-            return
-        if event.key() == Qt.Key_W:
-            self.set_draw_mode(not self._draw_mode)
-            return
         super().keyPressEvent(event)
 
     def _space_panning(self):

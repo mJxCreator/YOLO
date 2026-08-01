@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -122,6 +122,16 @@ class AnnotatePage(QWidget):
         splitter.addWidget(right)
         splitter.setStretchFactor(1, 1)
         root.addWidget(splitter)
+
+        # 窗口级快捷键（不依赖焦点，任何控件聚焦时都生效）
+        QShortcut(QKeySequence("A"), self, activated=self.prev_image)
+        QShortcut(QKeySequence("D"), self, activated=self.next_image)
+        QShortcut(QKeySequence("W"), self, activated=self.toggle_draw_mode)
+        QShortcut(QKeySequence("Delete"), self, activated=self.delete_box)
+        QShortcut(QKeySequence("Ctrl+S"), self, activated=self.save_labels)
+
+    def toggle_draw_mode(self):
+        self.canvas.set_draw_mode(not self.canvas.draw_mode)
 
     # ---------- 项目绑定 ----------
     def set_project(self, project):
