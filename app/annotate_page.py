@@ -104,10 +104,10 @@ class AnnotatePage(QWidget):
         self.btn_import.clicked.connect(self.import_images)
         lv.addWidget(self.btn_import)
 
-        hint = QLabel("提示：可直接把图片文件或整个文件夹拖入窗口")
-        hint.setStyleSheet("color: #888; font-size: 11px;")
-        hint.setWordWrap(True)
-        lv.addWidget(hint)
+        self.btn_delete_img = QPushButton("删除图片")
+        self.btn_delete_img.setStyleSheet("QPushButton { color: #d33; }")
+        self.btn_delete_img.clicked.connect(self.delete_image)
+        lv.addWidget(self.btn_delete_img)
 
         self.file_list = QListWidget()
         self.file_list.currentRowChanged.connect(self._on_select_file)
@@ -515,6 +515,21 @@ class AnnotatePage(QWidget):
             self.status_message.emit(f"已导入 {len(imported)} 张图片")
         else:
             self.status_message.emit("没有新图片可导入")
+
+    def delete_image(self):
+        """删除当前选中的图片（连同标签文件）"""
+        if self.project is None or self.current_index < 0:
+            return
+        img_path = self.image_list[self.current_index]
+        ret = QMessageBox.question(
+            self, "删除图片",
+            f"确定删除图片「{Path(img_path).name}」吗？\n对应的标注文件也会一并删除。",
+        )
+        if ret != QMessageBox.StandardButton.Yes:
+            return
+        self.project.delete_image(img_path)
+        self._load_images()
+        self.status_message.emit(f"已删除图片「{Path(img_path).name}」")
 
     @staticmethod
     def _collect_images(items):

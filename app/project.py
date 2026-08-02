@@ -65,6 +65,27 @@ class Project:
             imported.append(dst)
         return imported
 
+    def delete_image(self, image_path):
+        """删除图片及其标签文件，同时清理训练集/验证集中的副本。返回是否删除成功"""
+        image_path = Path(image_path)
+        removed = False
+        if image_path.exists():
+            image_path.unlink()
+            removed = True
+        label = self.get_label_path(image_path)
+        if label.exists():
+            label.unlink()
+        # 清理 datasets 中训练/验证副本
+        name = image_path.name
+        for sub in ["train", "val"]:
+            img = self.datasets_dir / "images" / sub / name
+            if img.exists():
+                img.unlink()
+            lab = self.datasets_dir / "labels" / sub / name.replace(image_path.suffix, ".txt")
+            if lab.exists():
+                lab.unlink()
+        return removed
+
     # ---------- 类别 ----------
     def get_classes(self):
         if self.classes_file.exists():
