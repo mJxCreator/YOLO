@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from PySide6.QtCore import Signal
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -49,6 +49,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{APP_NAME} - {project.root.name}")
         self.lbl_project.setText(f"项目: {project.root}")
         self.annotate_page.set_project(project)
+        self.annotate_page.set_config(self.config)
         self.train_page.set_project(project)
         self.detect_page.set_project(project)
         self.train_page.set_config(self.config)
@@ -72,10 +73,12 @@ class MainWindow(QMainWindow):
         act_export_label.triggered.connect(self.export_labels)
         file_menu.addAction(act_export_label)
         file_menu.addSeparator()
-        act_quit = QAction("退出", self)
-        act_quit.setShortcut(QKeySequence.Quit)
-        act_quit.triggered.connect(self.close)
-        file_menu.addAction(act_quit)
+        self.act_auto_save = QAction("自动保存", self)
+        self.act_auto_save.setCheckable(True)
+        self.act_auto_save.setChecked(self.config.get_auto_save())
+        self.act_auto_save.setStatusTip("开启后，切换图片时自动保存上一张图片的标注")
+        self.act_auto_save.toggled.connect(self.on_auto_save_toggled)
+        file_menu.addAction(self.act_auto_save)
 
         edit_menu = menubar.addMenu("编辑(&E)")
         act_settings = QAction("个性化设置", self)
@@ -164,6 +167,14 @@ class MainWindow(QMainWindow):
         self.btn_detect.setChecked(index == 2)
 
     # ---------- 菜单功能 ----------
+    def on_auto_save_toggled(self, enabled):
+        """自动保存开关状态变更"""
+        self.config.set_auto_save(enabled)
+        self.annotate_page.set_auto_save(enabled)
+        self.statusBar().showMessage(
+            "已开启自动保存：切换图片时自动保存标注" if enabled else "已关闭自动保存"
+        )
+
     def open_other_project(self):
         path = QFileDialog.getExistingDirectory(self, "选择项目文件夹")
         if path:

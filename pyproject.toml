@@ -1,7 +1,7 @@
 [project]
 name = "yolo26-defect-detection"
 version = "0.1.0"
-description = "基于 YOLO26 的材料缺陷检测系统"
+description = "基于 YOLO26 的一站式目标检测平台（标注 / 训练 / 推理）"
 requires-python = ">=3.10"
 dependencies = [
     "ultralytics>=8.4.21",

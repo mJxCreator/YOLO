@@ -83,6 +83,7 @@ class AnnotatePage(QWidget):
         self.current_index = -1
         self.current_boxes = []      # list of (QRectF, class_id)
         self._dirty = False
+        self._auto_save = False
         self._current_tag = None
         self._tag_rows = {}
 
@@ -216,6 +217,10 @@ class AnnotatePage(QWidget):
         self._load_images()
         self._update_classes()
 
+    def set_config(self, config):
+        self.config = config
+        self._auto_save = config.get_auto_save()
+
     def _full_class_colors(self):
         """所有标签的完整颜色映射：已自定义的保留，未定义的按类别序号分配默认色"""
         classes = self.project.get_classes()
@@ -302,6 +307,9 @@ class AnnotatePage(QWidget):
     def _on_select_file(self, row):
         if row < 0 or row >= len(self.image_list):
             return
+        # 切换图片前，自动保存上一张图片的标注
+        if self._auto_save and self._dirty and self.current_index >= 0:
+            self.save_labels()
         if self._dirty:
             self.save_labels()
         self.current_index = row
@@ -335,6 +343,10 @@ class AnnotatePage(QWidget):
 
     def _mark_dirty(self):
         self._dirty = True
+
+    def set_auto_save(self, enabled):
+        """设置自动保存：开启后切换图片时自动保存上一张标注"""
+        self._auto_save = bool(enabled)
 
     # ---------- 保存 ----------
     def save_labels(self):

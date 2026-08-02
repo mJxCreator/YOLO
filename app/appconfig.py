@@ -34,3 +34,11 @@ class AppConfig:
         self.data["recent_projects"].insert(0, path)
         self.data["recent_projects"] = self.data["recent_projects"][:10]
         self.save()
+
+    # ---------- 自动保存 ----------
+    def get_auto_save(self) -> bool:
+        return bool(self.data["settings"].get("auto_save", False))
+
+    def set_auto_save(self, enabled: bool):
+        self.data["settings"]["auto_save"] = bool(enabled)
+        self.save()
