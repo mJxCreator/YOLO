@@ -6,6 +6,7 @@ import threading
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -44,12 +45,13 @@ class TrainWorker(QThread):
     finished_ok = Signal(str)
     failed = Signal(str)
 
-    def __init__(self, data_yaml, model_path, params, device, parent=None):
+    def __init__(self, data_yaml, model_path, params, device, export_onnx=True, parent=None):
         super().__init__(parent)
         self.data_yaml = data_yaml
         self.model_path = model_path
         self.params = params
         self.device = device
+        self.export_onnx = export_onnx
         self._stop = False
         self.model = None
 
@@ -80,7 +82,7 @@ class TrainWorker(QThread):
             )
             self.log_line.emit(summary)
 
-            if self.params.get("export_onnx"):
+            if self.export_onnx:
                 self.log_line.emit("\n正在导出 ONNX 模型...")
                 try:
                     self.model.export(format="onnx", imgsz=self.params.get("imgsz", 640), simplify=True)
@@ -409,7 +411,6 @@ class TrainPage(QWidget):
             name="train",
             exist_ok=True,
             verbose=True,
-            export_onnx=self.export_onnx.isChecked(),
         )
 
         self.log_view.clear()
@@ -418,7 +419,10 @@ class TrainPage(QWidget):
         self.btn_stop.setEnabled(True)
         self.status_message.emit("开始训练...")
 
-        self.worker = TrainWorker(str(data_yaml), model_path, params, device)
+        self.worker = TrainWorker(
+            str(data_yaml), model_path, params, device,
+            export_onnx=self.export_onnx.isChecked(),
+        )
         self.worker.log_line.connect(self._append_log)
         self.worker.finished_ok.connect(self._on_train_done)
         self.worker.failed.connect(self._on_train_failed)
@@ -431,7 +435,7 @@ class TrainPage(QWidget):
 
     def _append_log(self, text):
         self.log_view.appendPlainText(text.rstrip())
-        self.log_view.moveCursor(self.log_view.textCursor().End)
+        self.log_view.moveCursor(QTextCursor.MoveOperation.End)
         m = re.search(r"^\s*(\d+)/(\d+)\s", text)
         if m:
             cur, total = int(m.group(1)), int(m.group(2))
