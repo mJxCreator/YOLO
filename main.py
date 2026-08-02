@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import sys
 
@@ -34,6 +35,7 @@ class Application:
         self.config = AppConfig()
         self.home = HomeWindow(self.config)
         self.main = None
+        self._device_thread = None
 
         self.home.project_opened.connect(self.open_main)
         self.home.show()
@@ -50,6 +52,12 @@ class Application:
         self.config.save()
         if self.main is not None:
             self.main.on_device_ready(device)
+
+    def shutdown_threads(self):
+        """应用退出前等待后台线程结束，避免 QThread 在运行中被销毁导致崩溃"""
+        t = self._device_thread
+        if t is not None and t.isRunning():
+            t.wait()
 
     def open_main(self, project):
         # 防重入：已有主窗口则先清理，避免双击产生多个窗口
@@ -87,8 +95,12 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("YOLO26 缺陷检测一体化平台")
     window = Application()
+    app.aboutToQuit.connect(window.shutdown_threads)
     sys.exit(app.exec())
 
 
 if __name__ == "__main__":
+    # 打包版必需：让 PyTorch DataLoader 的多进程工作子进程正确退出，
+    # 否则子进程会重新启动整个 GUI 导致训练挂起、关窗时 Qt 崩溃 (0xc0000409)
+    multiprocessing.freeze_support()
     main()

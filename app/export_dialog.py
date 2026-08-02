@@ -101,3 +101,9 @@ class ExportDialog(QDialog):
         self.btn_export.setEnabled(True)
         self.progress.setVisible(False)
         QMessageBox.critical(self, "导出失败", str(err))
+
+    def closeEvent(self, event):
+        # 等待导出线程结束，避免 QThread 销毁导致 Qt 崩溃
+        if self.worker is not None and self.worker.isRunning():
+            self.worker.wait()
+        event.accept()

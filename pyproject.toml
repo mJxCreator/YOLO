@@ -2,7 +2,7 @@
 name = "yolo26-defect-detection"
 version = "0.1.0"
 description = "基于 YOLO26 的一站式目标检测平台（标注 / 训练 / 推理）"
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 dependencies = [
     "ultralytics>=8.4.21",
     "opencv-python>=4.9.0",
@@ -13,6 +13,8 @@ dependencies = [
     "albumentations>=1.4.0",
     "h5py>=3.16.0",
     "pyside6>=6.11.1",
+    "torch>=2.13.0",
+    "torchvision",
 ]
 
 [tool.uv]
@@ -21,6 +23,16 @@ python-preference = "only-managed"
 [[tool.uv.index]]
 url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 default = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://mirror.sjtu.edu.cn/pytorch-wheels/cu130"
+explicit = true
+
+# torch/torchvision 使用 CUDA 13.0 版，否则默认从清华源装到 CPU 版
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+torchvision = { url = "https://download-r2.pytorch.org/whl/cu130/torchvision-0.28.0%2Bcu130-cp314-cp314-win_amd64.whl" }
 
 [dependency-groups]
 dev = [

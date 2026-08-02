@@ -42,7 +42,7 @@ pip install uv
 | `matplotlib` / `seaborn` | 训练曲线可视化 |
 | `scikit-learn` | 数据集划分等 |
 | `h5py` | HDF5 数据处理 |
-| `torch` / `torchvision` | 深度学习框架（随 ultralytics 自动安装） |
+| `torch` / `torchvision` | 深度学习框架（**CUDA 13.0 版**，默认启用 GPU 加速） |
 
 > 完整锁定版本清单见 [requirements.txt](requirements.txt)，由 `uv export` 自动生成。
 
@@ -59,6 +59,16 @@ uv sync
 > ```bash
 > uv sync --index-url https://pypi.org/simple
 > ```
+
+### GPU 加速（NVIDIA 显卡）
+
+本项目安装的 `torch` 为 **CUDA 13.0 版**（`torch==2.13.0+cu130`），程序启动时会自动检测 GPU 并在训练时优先使用（训练界面右下角会显示「设备: GPU 可用 ✓」）。
+
+- **需要 NVIDIA 显卡 + 较新驱动**（支持 CUDA 12.8+ 即可，如 RTX 20/30/40/50 系列）
+- 无独立显卡时会自动回退到 CPU 训练（速度较慢）
+- 如需强制使用 CPU 训练，可在训练界面的「训练设备」下拉框中选择 `cpu`
+
+> ⚠️ 若检测不到 GPU，请确认安装的是 CUDA 版 torch：`uv run python -c "import torch; print(torch.__version__)"`，输出应为 `2.13.0+cu130`（带 `+cu130` 后缀）。若为 `+cpu`，重新执行 `uv sync` 即可。
 
 ### 不用 uv 的替代方案
 

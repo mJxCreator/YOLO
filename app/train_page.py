@@ -5,9 +5,10 @@ import sys
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import QEventLoop, Qt, QThread, Signal
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QProgressBar,
+    QProgressDialog,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -115,6 +117,7 @@ class TrainPage(QWidget):
         self.project = None
         self.worker = None
         self._device = "cpu"
+        self._shutting_down = False
         self._build_ui()
 
     def _build_ui(self):
@@ -376,7 +379,14 @@ class TrainPage(QWidget):
         return str(yaml_path)
 
     # ---------- 训练控制 ----------
+    def is_training(self):
+        """当前是否有训练线程在运行"""
+        return self.worker is not None and self.worker.isRunning()
+
     def start_training(self):
+        if self.is_training():
+            QMessageBox.warning(self, "提示", "训练正在进行中，请先停止或等待完成")
+            return
         if self.project is None:
             QMessageBox.warning(self, "提示", "请先打开项目")
             return
@@ -394,6 +404,12 @@ class TrainPage(QWidget):
         if device == "自动选择":
             device = self._device
 
+        workers = self.workers.value()
+        if getattr(sys, "frozen", False) and workers > 0:
+            # 打包版中多进程数据加载可能卡死，改为 0 保证稳定性
+            workers = 0
+            self.status_message.emit("打包版已自动使用 workers=0（数据加载线程）")
+
         params = dict(
             epochs=self.epochs.value(),
             batch=self.batch.value(),
@@ -401,7 +417,7 @@ class TrainPage(QWidget):
             lr0=self.lr.value(),
             optimizer=self.combo_optimizer.currentText(),
             patience=self.patience.value(),
-            workers=self.workers.value(),
+            workers=workers,
             mosaic=self.aug_mosaic.value(),
             mixup=self.aug_mixup.value(),
             copy_paste=self.aug_copy_paste.value(),
@@ -429,9 +445,31 @@ class TrainPage(QWidget):
         self.worker.start()
 
     def stop_training(self):
-        if self.worker is not None and self.worker.isRunning():
+        if self.is_training():
             self.worker.stop()
             self.status_message.emit("正在停止训练...")
+
+    def shutdown(self):
+        """窗口关闭/退出前调用：请求停止并等待训练线程完全退出，
+        避免 QThread 在运行中被销毁导致 0xc0000409 崩溃"""
+        self._shutting_down = True
+        if not self.is_training():
+            self.worker = None
+            return
+        self.btn_train.setEnabled(False)
+        self.btn_stop.setEnabled(False)
+        self.worker.stop()
+        dlg = QProgressDialog("正在停止训练并保存进度，请稍候...", "", 0, 0, self)
+        dlg.setWindowTitle("正在停止训练")
+        dlg.setCancelButton(None)
+        dlg.setWindowModality(Qt.WindowModality.WindowModal)
+        dlg.setMinimumDuration(300)
+        dlg.show()
+        while self.worker.isRunning():
+            QApplication.processEvents(QEventLoop.ProcessEventsFlag.AllEvents, 50)
+            self.worker.wait(50)
+        dlg.close()
+        self.worker = None
 
     def _append_log(self, text):
         self.log_view.appendPlainText(text.rstrip())
@@ -446,6 +484,8 @@ class TrainPage(QWidget):
         self.btn_train.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self.progress.setValue(self.progress.maximum())
+        if self._shutting_down:
+            return
         self.refresh_models()
         self.status_message.emit("训练完成")
         QMessageBox.information(self, "训练完成", f"训练完成！\n{message}")
@@ -453,6 +493,8 @@ class TrainPage(QWidget):
     def _on_train_failed(self, error):
         self.btn_train.setEnabled(True)
         self.btn_stop.setEnabled(False)
+        if self._shutting_down:
+            return
         self.status_message.emit(f"训练失败: {error}")
         QMessageBox.critical(self, "训练失败", str(error))
 

@@ -215,4 +215,16 @@ class MainWindow(QMainWindow):
         webbrowser.open(GITHUB_URL)
 
     def closeEvent(self, event):
+        if self.train_page.is_training() or self.detect_page.is_detecting():
+            ret = QMessageBox.question(
+                self,
+                "确认退出",
+                "训练或检测正在进行中，退出将中断当前任务。确定退出吗？",
+            )
+            if ret != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+        # 先停止并等待后台线程退出，避免 QThread 销毁导致 Qt 崩溃
+        self.train_page.shutdown()
+        self.detect_page.shutdown()
         event.accept()

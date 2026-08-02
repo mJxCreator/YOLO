@@ -159,6 +159,7 @@ class DetectPage(QWidget):
         self.worker = None
         self.result_files = []
         self.result_index = -1
+        self._shutting_down = False
         self._build_ui()
 
     def _build_ui(self):
@@ -287,7 +288,13 @@ class DetectPage(QWidget):
             self.edit_source.setText(path)
 
     # ---------- 检测 ----------
+    def is_detecting(self):
+        return self.worker is not None and self.worker.isRunning()
+
     def start_detect(self):
+        if self.is_detecting():
+            QMessageBox.warning(self, "提示", "检测正在进行中，请先停止")
+            return
         if self.project is None:
             QMessageBox.warning(self, "提示", "请先打开项目")
             return
@@ -332,9 +339,17 @@ class DetectPage(QWidget):
         self.worker.start()
 
     def stop_detect(self):
-        if self.worker is not None and self.worker.isRunning():
+        if self.is_detecting():
             self.worker.stop()
             self.status_message.emit("正在停止检测...")
+
+    def shutdown(self):
+        """窗口关闭/退出前调用：停止并等待检测线程，避免 QThread 销毁崩溃"""
+        self._shutting_down = True
+        if self.is_detecting():
+            self.worker.stop()
+            self.worker.wait()
+        self.worker = None
 
     def _on_frame(self, arr):
         pm = ndarray_to_pixmap(arr)
@@ -370,6 +385,8 @@ class DetectPage(QWidget):
         self.btn_detect.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self.progress.setVisible(False)
+        if self._shutting_down:
+            return
         self._load_result_list()
         self.status_message.emit(message)
         QMessageBox.information(self, "检测完成", message)
@@ -378,6 +395,8 @@ class DetectPage(QWidget):
         self.btn_detect.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self.progress.setVisible(False)
+        if self._shutting_down:
+            return
         self.status_message.emit(f"检测失败: {error}")
         QMessageBox.critical(self, "检测失败", str(error))
 
