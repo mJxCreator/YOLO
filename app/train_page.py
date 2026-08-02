@@ -171,6 +171,24 @@ class TrainPage(QWidget):
         self.lr.setSingleStep(0.0005)
         rf.addRow("学习率:", self.lr)
 
+        self.combo_optimizer = QComboBox()
+        self.combo_optimizer.addItems(["AdamW", "SGD", "Adam", "auto"])
+        self.combo_optimizer.setCurrentText("AdamW")
+        rf.addRow("优化器:", self.combo_optimizer)
+
+        self.patience = QSpinBox()
+        self.patience.setRange(0, 500)
+        self.patience.setValue(30)
+        self.patience.setSuffix(" 轮")
+        self.patience.setToolTip("连续 N 轮精度不提升就提前停止（0 表示不提前停止）")
+        rf.addRow("早停耐心值:", self.patience)
+
+        self.workers = QSpinBox()
+        self.workers.setRange(0, 32)
+        self.workers.setValue(8)
+        self.workers.setToolTip("数据加载并行线程数，CPU 核多时可调大")
+        rf.addRow("工作线程数:", self.workers)
+
         self.pretrained = QCheckBox("使用预训练权重")
         self.pretrained.setChecked(True)
         rf.addRow(self.pretrained)
@@ -184,7 +202,44 @@ class TrainPage(QWidget):
         rf.addRow("训练设备:", self.combo_device)
 
         top.addWidget(left)
-        top.addWidget(right, 1)
+
+        # 右侧：训练参数 + 数据增强（right 已在上方创建并填充控件）
+        right_panel = QVBoxLayout()
+        right_panel.addWidget(right)
+
+        aug = QGroupBox("数据增强")
+        af = QFormLayout(aug)
+
+        self.aug_mosaic = QDoubleSpinBox()
+        self.aug_mosaic.setRange(0.0, 1.0)
+        self.aug_mosaic.setSingleStep(0.1)
+        self.aug_mosaic.setValue(1.0)
+        self.aug_mosaic.setToolTip("4 张图拼成一张训练（0 关闭）")
+        af.addRow("Mosaic:", self.aug_mosaic)
+
+        self.aug_mixup = QDoubleSpinBox()
+        self.aug_mixup.setRange(0.0, 1.0)
+        self.aug_mixup.setSingleStep(0.1)
+        self.aug_mixup.setValue(0.0)
+        self.aug_mixup.setToolTip("两张图混合训练的概率（0 关闭）")
+        af.addRow("Mixup:", self.aug_mixup)
+
+        self.aug_copy_paste = QDoubleSpinBox()
+        self.aug_copy_paste.setRange(0.0, 1.0)
+        self.aug_copy_paste.setSingleStep(0.1)
+        self.aug_copy_paste.setValue(0.0)
+        self.aug_copy_paste.setToolTip("实例复制粘贴增强的概率（0 关闭）")
+        af.addRow("Copy-paste:", self.aug_copy_paste)
+
+        self.aug_fliplr = QDoubleSpinBox()
+        self.aug_fliplr.setRange(0.0, 1.0)
+        self.aug_fliplr.setSingleStep(0.1)
+        self.aug_fliplr.setValue(0.5)
+        self.aug_fliplr.setToolTip("水平翻转的概率（0 关闭）")
+        af.addRow("水平翻转:", self.aug_fliplr)
+
+        right_panel.addWidget(aug)
+        top.addLayout(right_panel, 1)
         root.addLayout(top)
 
         # ---- 训练控制 ----
@@ -342,12 +397,18 @@ class TrainPage(QWidget):
             batch=self.batch.value(),
             imgsz=int(self.imgsz.currentText()),
             lr0=self.lr.value(),
+            optimizer=self.combo_optimizer.currentText(),
+            patience=self.patience.value(),
+            workers=self.workers.value(),
+            mosaic=self.aug_mosaic.value(),
+            mixup=self.aug_mixup.value(),
+            copy_paste=self.aug_copy_paste.value(),
+            fliplr=self.aug_fliplr.value(),
             pretrained=self.pretrained.isChecked(),
             project=str(self.project.runs_dir),
             name="train",
             exist_ok=True,
             verbose=True,
-            patience=30,
             export_onnx=self.export_onnx.isChecked(),
         )
 
