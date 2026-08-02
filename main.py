@@ -1,9 +1,15 @@
 import multiprocessing
 import os
 import sys
+from pathlib import Path
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 os.environ.setdefault("YOLO_OFFLINE", "1")
+
+if getattr(sys, "frozen", False):
+    # 打包版：切到用户目录作为工作目录，避免 ultralytics 把下载的
+    # 权重/验证结果（yolo26n.pt、runs 等）写到 exe 所在文件夹
+    os.chdir(Path.home())
 
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import QApplication

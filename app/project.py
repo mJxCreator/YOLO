@@ -149,7 +149,7 @@ class Project:
         return sorted(models, key=lambda p: p.stat().st_mtime, reverse=True)
 
     def get_pretrained_models(self):
-        cands = list(self.root.glob("*.pt")) + list(Path.cwd().glob("*.pt"))
+        cands = [p.resolve() for p in (list(self.root.glob("*.pt")) + list(Path.cwd().glob("*.pt")))]
         bundled = resource_path("yolo26n.pt")
         if bundled.exists() and str(bundled) not in [str(p) for p in cands]:
             cands.append(bundled)

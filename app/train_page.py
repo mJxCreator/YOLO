@@ -73,7 +73,14 @@ class TrainWorker(QThread):
                 self.finished_ok.emit("训练已被手动停止")
                 return
 
-            metrics = self.model.val(data=self.data_yaml, device=self.device, split="val")
+            metrics = self.model.val(
+                data=self.data_yaml,
+                device=self.device,
+                split="val",
+                project=self.params.get("project"),
+                name="val",
+                exist_ok=True,
+            )
             m = metrics.box
             summary = (
                 f"\n===== 验证结果 =====\n"
