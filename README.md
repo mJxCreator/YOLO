@@ -10,12 +10,69 @@
 - **模型导出**：支持导出为 ONNX / TensorRT 格式，方便边缘端部署
 - **轻量启动**：默认使用 yolo26n（Nano）模型，快速上手
 
-> 💡 虽然项目最初面向材料缺陷检测，但核心能力（标注、训练、推理）与具体类别完全解耦，只需在 [data.yaml](file:///c:/mProgram/YOLO26/data.yaml) 中替换类别名即可用于其他领域，如 PCB 缺陷、农作物病害、车辆/行人识别等。
+> 💡 虽然项目最初面向材料缺陷检测，但核心能力（标注、训练、推理）与具体类别完全解耦，只需在 [data.yaml](data.yaml) 中替换类别名即可用于其他领域，如 PCB 缺陷、农作物病害、车辆/行人识别等。
 
 ## 环境要求
 
-- Python >= 3.10
-- 推荐使用 [uv](https://docs.astral.sh/uv/) 管理项目依赖
+- **Python >= 3.10**（推荐 3.10 - 3.12）
+- **包管理器**：推荐使用 [uv](https://docs.astral.sh/uv/)（也可以使用 pip，见下方替代方案）
+
+### 安装 uv
+
+```bash
+# Windows
+pip install uv
+# 或
+winget install astral-sh.uv
+
+# macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# 或
+pip install uv
+```
+
+### 主要依赖
+
+| 依赖 | 用途 |
+|------|------|
+| `ultralytics` | YOLO26 模型训练 / 推理 |
+| `pyside6` | 桌面 GUI（标注 / 训练 / 检测界面） |
+| `opencv-python` | 图像 / 视频处理 |
+| `albumentations` | 数据增强 |
+| `matplotlib` / `seaborn` | 训练曲线可视化 |
+| `scikit-learn` | 数据集划分等 |
+| `h5py` | HDF5 数据处理 |
+| `torch` / `torchvision` | 深度学习框架（随 ultralytics 自动安装） |
+
+> 完整锁定版本清单见 [requirements.txt](requirements.txt)，由 `uv export` 自动生成。
+
+### 安装依赖
+
+```bash
+uv sync
+```
+
+命令会在项目目录创建 `.venv` 虚拟环境并安装所有依赖（依据 [pyproject.toml](pyproject.toml) 与 `uv.lock`）。
+
+> 💡 **国内镜像说明**：本项目的 `pyproject.toml` 已将默认包源配置为清华大学 PyPI 镜像，国内克隆后开箱即用。若你在境外或拉取失败，可移除 `pyproject.toml` 中的 `[tool.uv.index]` 段，或在安装时指定官方源：
+>
+> ```bash
+> uv sync --index-url https://pypi.org/simple
+> ```
+
+### 不用 uv 的替代方案
+
+如果你习惯用 pip，可以直接安装锁定依赖：
+
+```bash
+python -m venv .venv
+# Windows
+.venv\Scripts\activate
+# macOS / Linux
+source .venv/bin/activate
+
+pip install -r requirements.txt
+```
 
 ## 使用方式
 
@@ -26,13 +83,17 @@
 集成了**人工标注 → 数据集划分 → 模型训练 → 推理检测**全流程的一站式桌面应用：
 
 ```bash
+# 1. 克隆项目后，先安装依赖（会自动创建 .venv）
+uv sync
+
+# 2. 启动应用
 uv run python main.py
 ```
 
 进入应用后可完成以下操作：
 
 1. **启动界面**：新建项目 / 打开历史项目
-2. **标注界面**：导入图片（支持整个文件夹批量导入，也可直接拖拽文件/文件夹）→ 管理自定义标签（新增/重命名/删除，每个标签独立配色）→ 画框标注（快捷键 W 画框、A/D 切换图片、Ctrl+S 保存）
+2. **标注界面**：导入图片（支持整个文件夹批量导入，也可直接拖拽文件/文件夹）→ 管理自定义标签（新增/重命名/删除，每个标签独立配色）→ 画框标注（快捷键 W 框选、S 描边、A/D 切换图片、Ctrl+Z 撤销、Ctrl+S 保存）
 3. **训练界面**：一键划分数据集（默认 80/20）→ 配置参数 → 开始训练（后台运行，实时日志，自动检测 GPU/CPU）
 4. **检测界面**：图片/文件夹/视频/摄像头检测，结果可视化
 
@@ -51,6 +112,8 @@ build.bat
 ```bash
 uv sync
 ```
+
+（若已按方式一安装过可跳过）
 
 #### 2. 下载预训练模型
 
@@ -101,7 +164,7 @@ uv run scripts/split_data.py --images raw_images --labels raw_labels
 
 ### 配置数据
 
-根据你的目标类别修改 [data.yaml](file:///c:/mProgram/YOLO26/data.yaml)：
+根据你的目标类别修改 [data.yaml](data.yaml)：
 
 ```yaml
 path: ./datasets
@@ -215,6 +278,7 @@ model.export(format="engine", imgsz=640, half=True)
 │   └── 需求分析.md            # 需求文档
 ├── data.yaml                 # 数据集配置
 ├── pyproject.toml            # 项目依赖配置
+├── requirements.txt          # 锁定依赖清单（pip 用户使用，uv export 生成）
 ├── build.spec                # PyInstaller 打包配置
 ├── build.bat                 # 一键打包脚本
 ├── datasets/                 # 数据集目录（不纳入版本控制）
@@ -231,7 +295,7 @@ model.export(format="engine", imgsz=640, half=True)
 
 ### 如何适配我的目标类别？
 
-编辑 [data.yaml](file:///c:/mProgram/YOLO26/data.yaml) 中的 `nc` 和 `names` 字段，修改为你实际的类别名称和数量即可，无需改动任何代码。GUI 标注界面中也可直接通过「新增/重命名/删除」按钮实时管理类别。
+编辑 [data.yaml](data.yaml) 中的 `nc` 和 `names` 字段，修改为你实际的类别名称和数量即可，无需改动任何代码。GUI 标注界面中也可直接通过「新增/重命名/删除」按钮实时管理类别。
 
 ### 训练时显存不足怎么办？
 
